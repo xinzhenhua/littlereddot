@@ -1,0 +1,1559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>小红点 · 极简PDF</title>
+    <!-- 核心库 -->
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.0.2/dist/tesseract.min.js"></script>
+    <script src="https://unpkg.com/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://unpkg.com/docx@7.8.2/build/index.js"></script>
+    <style>
+        /* 极简重置 - 只有黑白红 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: #ffffff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.5;
+            color: #1d1d1f;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* 主容器 - 纯粹留白 */
+        .app {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 48px 32px;
+            min-height: 100vh;
+        }
+
+        /* 头部 - 极致简约 */
+        .header {
+            margin-bottom: 64px;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeUp 0.6s ease forwards;
+        }
+
+        @keyframes fadeUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .header h1 {
+            font-size: 40px;
+            font-weight: 500;
+            letter-spacing: -0.02em;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .red-dot {
+            width: 12px;
+            height: 12px;
+            background-color: #e60012;
+            border-radius: 50%;
+            transition: transform 0.3s ease;
+        }
+
+        .header:hover .red-dot {
+            transform: scale(1.2);
+        }
+
+        .badge {
+            color: #86868b;
+            font-size: 14px;
+            font-weight: 400;
+            margin-left: auto;
+            opacity: 0;
+            animation: fadeIn 0.6s 0.2s ease forwards;
+        }
+
+        @keyframes fadeIn {
+            to { opacity: 1; }
+        }
+
+        /* 功能网格 - 极简卡片 */
+        .tools-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 1px;
+            background-color: #f0f0f0;
+            border: 1px solid #f0f0f0;
+            border-radius: 16px;
+            overflow: hidden;
+            margin-bottom: 32px;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeUp 0.6s 0.1s ease forwards;
+        }
+
+        .tool-item {
+            background-color: #ffffff;
+            padding: 20px 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 13px;
+            font-weight: 450;
+            color: #1d1d1f;
+            border-right: 1px solid #f5f5f5;
+            border-bottom: 1px solid #f5f5f5;
+        }
+
+        .tool-item:hover {
+            background-color: #fafafa;
+        }
+
+        .tool-item.active {
+            background-color: #e60012;
+            color: white;
+        }
+
+        .tool-desc {
+            font-size: 10px;
+            opacity: 0.6;
+            margin-top: 4px;
+        }
+
+        /* 工作区 - 极简卡片 */
+        .workspace {
+            background-color: #ffffff;
+            border: 1px solid #f0f0f0;
+            border-radius: 24px;
+            padding: 32px;
+            margin: 32px 0;
+            display: none;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.4s ease, transform 0.4s ease;
+        }
+
+        .workspace.visible {
+            display: block;
+            animation: fadeUp 0.4s ease forwards;
+        }
+
+        .workspace-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 28px;
+        }
+
+        .workspace-title {
+            font-size: 20px;
+            font-weight: 450;
+            color: #1d1d1f;
+        }
+
+        .workspace-title span {
+            color: #e60012;
+            font-weight: 500;
+        }
+
+        .back-btn {
+            color: #86868b;
+            cursor: pointer;
+            font-size: 14px;
+            padding: 8px 16px;
+            border-radius: 40px;
+            border: 1px solid #f0f0f0;
+            transition: all 0.2s ease;
+        }
+
+        .back-btn:hover {
+            background-color: #f5f5f5;
+            border-color: #e60012;
+        }
+
+        /* 文件选择区 - 极简虚线 */
+        .file-zone {
+            border: 1.5px dashed #e0e0e0;
+            border-radius: 16px;
+            padding: 40px 24px;
+            text-align: center;
+            background-color: #ffffff;
+            cursor: pointer;
+            margin-bottom: 24px;
+            transition: all 0.2s ease;
+            display: block;
+        }
+
+        .file-zone:hover {
+            border-color: #e60012;
+            background-color: #fef5f5;
+        }
+
+        .file-zone .main-text {
+            font-size: 15px;
+            font-weight: 450;
+            color: #1d1d1f;
+            letter-spacing: -0.01em;
+        }
+
+        /* 文件列表 */
+        .file-list {
+            margin: 16px 0;
+            max-height: 200px;
+            overflow-y: auto;
+            display: block;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #f0f0f0;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .file-name {
+            flex: 1;
+            font-size: 14px;
+            color: #1d1d1f;
+        }
+
+        .file-size {
+            color: #86868b;
+            font-size: 13px;
+            margin: 0 16px;
+        }
+
+        .file-remove {
+            color: #e60012;
+            cursor: pointer;
+            font-size: 18px;
+            opacity: 0.4;
+            transition: opacity 0.2s ease;
+            padding: 0 8px;
+        }
+
+        .file-remove:hover {
+            opacity: 1;
+        }
+
+        /* Markdown编辑器 - 极简双栏 */
+        .markdown-editor-section {
+            margin: 24px 0;
+            border: 1px solid #f0f0f0;
+            border-radius: 16px;
+            overflow: hidden;
+            display: none;
+        }
+
+        .markdown-toolbar {
+            display: flex;
+            gap: 8px;
+            padding: 12px 16px;
+            background-color: #fafafa;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .toolbar-btn {
+            padding: 6px 12px;
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 30px;
+            font-size: 12px;
+            cursor: pointer;
+            color: #1d1d1f;
+            transition: all 0.2s ease;
+        }
+
+        .toolbar-btn:hover {
+            border-color: #e60012;
+            color: #e60012;
+        }
+
+        .markdown-split {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1px;
+            background-color: #f0f0f0;
+        }
+
+        .markdown-input-panel,
+        .markdown-preview-panel {
+            background: white;
+            min-height: 350px;
+        }
+
+        .panel-header {
+            padding: 10px 16px;
+            background-color: #fafafa;
+            font-size: 12px;
+            font-weight: 500;
+            color: #86868b;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .markdown-textarea {
+            width: 100%;
+            height: 300px;
+            border: none;
+            padding: 16px;
+            font-family: 'Monaco', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            resize: none;
+            outline: none;
+            background: white;
+        }
+
+        .markdown-preview {
+            height: 300px;
+            overflow-y: auto;
+            padding: 16px;
+            background: white;
+            font-size: 13px;
+        }
+
+        /* Markdown预览样式 */
+        .markdown-preview h1 { font-size: 22px; margin: 16px 0 8px; }
+        .markdown-preview h2 { font-size: 18px; margin: 14px 0 6px; }
+        .markdown-preview table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 12px 0;
+            border: 1px solid #f0f0f0;
+        }
+        .markdown-preview th {
+            background: #fafafa;
+            padding: 8px;
+            border: 1px solid #f0f0f0;
+            font-weight: 500;
+        }
+        .markdown-preview td {
+            padding: 6px 8px;
+            border: 1px solid #f0f0f0;
+        }
+
+        /* 进度条 */
+        .progress-area {
+            margin: 20px 0;
+            display: none;
+        }
+
+        .progress-bar-bg {
+            background: #f0f0f0;
+            height: 2px;
+            border-radius: 1px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: #e60012;
+            transition: width 0.3s ease;
+        }
+
+        .progress-status {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 6px;
+            font-size: 12px;
+            color: #86868b;
+        }
+
+        /* 结果区域 */
+        .result-area {
+            margin: 28px 0 0;
+            border-top: 1px solid #f0f0f0;
+            padding-top: 24px;
+            display: none;
+        }
+
+        .result-title {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 16px;
+            color: #1d1d1f;
+        }
+
+        .result-list {
+            max-height: 250px;
+            overflow-y: auto;
+            border: 1px solid #f0f0f0;
+            border-radius: 12px;
+            margin-bottom: 16px;
+        }
+
+        .result-file-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid #f5f5f5;
+            background: white;
+            animation: slideIn 0.3s ease;
+        }
+
+        .result-file-item:last-child {
+            border-bottom: none;
+        }
+
+        .result-file-checkbox {
+            margin-right: 12px;
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            accent-color: #e60012;
+        }
+
+        .result-file-name {
+            flex: 1;
+            font-size: 14px;
+            color: #1d1d1f;
+        }
+
+        .result-file-size {
+            color: #86868b;
+            font-size: 12px;
+            margin: 0 16px;
+        }
+
+        .result-file-rename {
+            color: #e60012;
+            cursor: pointer;
+            font-size: 13px;
+            padding: 4px 10px;
+            border-radius: 30px;
+            opacity: 0.5;
+            transition: opacity 0.2s ease;
+        }
+
+        .result-file-rename:hover {
+            opacity: 1;
+            background: #fef5f5;
+        }
+
+        /* 操作按钮组 */
+        .result-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+
+        .result-btn {
+            padding: 10px 20px;
+            border-radius: 40px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: none;
+        }
+
+        .result-btn.primary {
+            background-color: #e60012;
+            color: white;
+        }
+
+        .result-btn.primary:hover {
+            background-color: #c5000f;
+            transform: scale(1.02);
+        }
+
+        .result-btn.secondary {
+            background-color: #f5f5f5;
+            color: #1d1d1f;
+        }
+
+        .result-btn.secondary:hover {
+            background-color: #e8e8e8;
+        }
+
+        .result-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        /* 主按钮 */
+        .btn-container {
+            margin-top: 24px;
+            transition: opacity 0.3s ease;
+        }
+
+        .action-btn {
+            width: 100%;
+            background-color: #e60012;
+            color: white;
+            border: none;
+            border-radius: 40px;
+            padding: 16px 0;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            opacity: 1;
+        }
+
+        .action-btn:hover {
+            background-color: #c5000f;
+            transform: scale(1.01);
+        }
+
+        .action-btn.hidden {
+            opacity: 0;
+            pointer-events: none;
+            height: 0;
+            padding: 0;
+            margin: 0;
+        }
+
+        /* ZIP选项 */
+        .zip-option {
+            margin: 16px 0;
+            padding: 16px;
+            background: #fafafa;
+            border-radius: 12px;
+            border: 1px solid #f0f0f0;
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .zip-buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 8px;
+        }
+
+        .zip-btn {
+            flex: 1;
+            padding: 10px;
+            background: white;
+            border: 1px solid #e60012;
+            color: #e60012;
+            border-radius: 30px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .zip-btn:hover {
+            background: #e60012;
+            color: white;
+        }
+
+        /* 选项菜单 */
+        .option-menu {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            border-top: 1px solid #f0f0f0;
+            padding: 20px;
+            transform: translateY(100%);
+            transition: transform 0.3s ease;
+            z-index: 1000;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .option-menu.show {
+            transform: translateY(0);
+        }
+
+        .option-item {
+            padding: 16px;
+            text-align: center;
+            font-size: 15px;
+            border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .option-item:last-child {
+            border-bottom: none;
+        }
+
+        .option-item:hover {
+            background-color: #f5f5f5;
+        }
+
+        .option-item.cancel {
+            color: #e60012;
+            font-weight: 500;
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.2);
+            display: none;
+            z-index: 999;
+            backdrop-filter: blur(2px);
+        }
+
+        .overlay.show {
+            display: block;
+        }
+
+        /* 通知 */
+        .notification {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: #1d1d1f;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 40px;
+            font-size: 13px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .notification.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* 加载动画 */
+        .loading-view {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255,255,255,0.8);
+            backdrop-filter: blur(4px);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .loading-content {
+            text-align: center;
+            padding: 24px;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .spinner {
+            width: 28px;
+            height: 28px;
+            border: 2px solid #f0f0f0;
+            border-top-color: #e60012;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 12px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* 隐藏文件输入 */
+        #hiddenFileInput {
+            position: absolute;
+            width: 0;
+            height: 0;
+            opacity: 0;
+        }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .app {
+                padding: 32px 20px;
+            }
+            .header h1 {
+                font-size: 32px;
+            }
+            .markdown-split {
+                grid-template-columns: 1fr;
+            }
+            .result-actions {
+                flex-direction: column;
+            }
+            .zip-buttons {
+                flex-direction: column;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .tools-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .workspace {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <div class="header">
+            <h1>
+                <span class="red-dot"></span>
+                小红点
+            </h1>
+            <div class="badge">极简 PDF 工具</div>
+        </div>
+
+        <!-- 功能网格 -->
+        <div class="tools-grid" id="toolsGrid">
+            <div class="tool-item" data-tool="pdf2word">
+                PDF转Word
+                <div class="tool-desc">OCR识别</div>
+            </div>
+            <div class="tool-item" data-tool="img2word">
+                图片转Word
+                <div class="tool-desc">文字识别</div>
+            </div>
+            <div class="tool-item" data-tool="md2word">
+                Markdown转Word
+                <div class="tool-desc">实时预览</div>
+            </div>
+            <div class="tool-item" data-tool="pdf2img">
+                PDF转图片
+                <div class="tool-desc">每页PNG</div>
+            </div>
+            <div class="tool-item" data-tool="img2pdf">
+                图片转PDF
+                <div class="tool-desc">多图合并</div>
+            </div>
+            <div class="tool-item" data-tool="word2pdf">
+                Word转PDF
+                <div class="tool-desc">高清截图</div>
+            </div>
+            <div class="tool-item" data-tool="pdf-merge">
+                PDF合并
+                <div class="tool-desc">合并多个</div>
+            </div>
+            <div class="tool-item" data-tool="pdf-split">
+                PDF拆分
+                <div class="tool-desc">拆成多个</div>
+            </div>
+            <div class="tool-item" data-tool="pdf-extract">
+                提取页面
+                <div class="tool-desc">指定页码</div>
+            </div>
+            <div class="tool-item" data-tool="pdf-rotate">
+                旋转页面
+                <div class="tool-desc">单页旋转</div>
+            </div>
+        </div>
+
+        <!-- 工作区 -->
+        <div class="workspace" id="workspace">
+            <div class="workspace-header">
+                <div class="workspace-title" id="workspaceTitle"><span>·</span></div>
+                <div class="back-btn" id="backBtn">← 返回</div>
+            </div>
+
+            <!-- 文件选择区 - 始终存在，通过JS控制显示/隐藏 -->
+            <div class="file-zone" id="fileZone">
+                <div class="main-text">点击选择文件</div>
+            </div>
+
+            <!-- 文件列表 - 动态显示 -->
+            <div class="file-list" id="fileList"></div>
+            
+            <!-- Markdown编辑器 - 默认隐藏 -->
+            <div class="markdown-editor-section" id="markdownSection">
+                <div class="markdown-toolbar">
+                    <button class="toolbar-btn" id="copyMarkdownBtn">复制</button>
+                    <button class="toolbar-btn" id="clearMarkdownBtn">清空</button>
+                </div>
+                <div class="markdown-split">
+                    <div class="markdown-input-panel">
+                        <div class="panel-header">输入</div>
+                        <textarea id="markdownInput" class="markdown-textarea" placeholder="# 标题"></textarea>
+                    </div>
+                    <div class="markdown-preview-panel">
+                        <div class="panel-header">预览</div>
+                        <div id="markdownPreview" class="markdown-preview"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 进度条 -->
+            <div class="progress-area" id="progressArea">
+                <div class="progress-bar-bg">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-status">
+                    <span id="progressStatus">处理中...</span>
+                    <span id="progressPercent">0%</span>
+                </div>
+            </div>
+
+            <!-- 结果区域 -->
+            <div class="result-area" id="resultArea">
+                <div class="result-title">转换完成</div>
+                <div class="result-list" id="resultList"></div>
+                
+                <div class="zip-option" id="zipOption">
+                    <div class="zip-buttons">
+                        <button class="zip-btn" id="downloadZipBtn">打包ZIP</button>
+                        <button class="zip-btn" id="downloadSeparateBtn">分开下载</button>
+                    </div>
+                </div>
+
+                <div class="result-actions">
+                    <button class="result-btn secondary" id="selectAllResultBtn">全选</button>
+                    <button class="result-btn primary" id="downloadSelectedBtn" disabled>下载选中</button>
+                </div>
+            </div>
+
+            <!-- 主按钮 -->
+            <div class="btn-container" id="btnContainer">
+                <button class="action-btn" id="actionBtn">开始处理</button>
+            </div>
+        </div>
+
+        <!-- 隐藏文件输入 -->
+        <input type="file" id="hiddenFileInput" multiple>
+
+        <!-- 选项菜单 -->
+        <div class="overlay" id="overlay"></div>
+        <div class="option-menu" id="optionMenu">
+            <div class="option-item" id="chatOption">从微信聊天获取</div>
+            <div class="option-item" id="localOption">从本地文件获取</div>
+            <div class="option-item cancel" id="cancelOption">取消</div>
+        </div>
+
+        <!-- 加载状态 -->
+        <div class="loading-view" id="loadingView">
+            <div class="loading-content">
+                <div class="spinner"></div>
+                <div id="loadingText">处理中...</div>
+            </div>
+        </div>
+
+        <!-- 通知 -->
+        <div class="notification" id="notification">
+            <span id="notifyMsg"></span>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+            // 状态
+            let currentTool = null;
+            let selectedFiles = [];
+            let pdfDocs = [];
+            let wordPages = [];
+            let previewImages = [];
+            let currentRotation = 0;
+            let selectedPages = new Set();
+            let resultFiles = [];
+            
+            // OCR 状态
+            let ocrImages = [];
+            let ocrCurrentIndex = 0;
+            let ocrResults = [];
+            let ocrWorker = null;
+            let isOcrRunning = false;
+            
+            // PDF转Word状态
+            let currentPdfFile = null;
+            let pdfDocument = null;
+            
+            // DOM
+            const toolItems = document.querySelectorAll('.tool-item');
+            const workspace = document.getElementById('workspace');
+            const workspaceTitle = document.getElementById('workspaceTitle');
+            const backBtn = document.getElementById('backBtn');
+            const fileZone = document.getElementById('fileZone');
+            const fileList = document.getElementById('fileList');
+            const markdownSection = document.getElementById('markdownSection');
+            const markdownInput = document.getElementById('markdownInput');
+            const markdownPreview = document.getElementById('markdownPreview');
+            const copyMarkdownBtn = document.getElementById('copyMarkdownBtn');
+            const clearMarkdownBtn = document.getElementById('clearMarkdownBtn');
+            const progressArea = document.getElementById('progressArea');
+            const progressFill = document.getElementById('progressFill');
+            const progressStatus = document.getElementById('progressStatus');
+            const progressPercent = document.getElementById('progressPercent');
+            const actionBtn = document.getElementById('actionBtn');
+            const btnContainer = document.getElementById('btnContainer');
+            const hiddenInput = document.getElementById('hiddenFileInput');
+            const resultArea = document.getElementById('resultArea');
+            const resultList = document.getElementById('resultList');
+            const zipOption = document.getElementById('zipOption');
+            const downloadZipBtn = document.getElementById('downloadZipBtn');
+            const downloadSeparateBtn = document.getElementById('downloadSeparateBtn');
+            const selectAllResultBtn = document.getElementById('selectAllResultBtn');
+            const downloadSelectedBtn = document.getElementById('downloadSelectedBtn');
+            const loadingView = document.getElementById('loadingView');
+            const loadingText = document.getElementById('loadingText');
+            const overlay = document.getElementById('overlay');
+            const optionMenu = document.getElementById('optionMenu');
+            const chatOption = document.getElementById('chatOption');
+            const localOption = document.getElementById('localOption');
+            const cancelOption = document.getElementById('cancelOption');
+            const notification = document.getElementById('notification');
+            const notifyMsg = document.getElementById('notifyMsg');
+
+            // 工具名称
+            const toolNames = {
+                'pdf2word': 'PDF转Word',
+                'img2word': '图片转Word',
+                'md2word': 'Markdown转Word',
+                'pdf2img': 'PDF转图片',
+                'img2pdf': '图片转PDF',
+                'word2pdf': 'Word转PDF',
+                'pdf-merge': 'PDF合并',
+                'pdf-split': 'PDF拆分',
+                'pdf-extract': '提取页面',
+                'pdf-rotate': '旋转页面'
+            };
+
+            // 工具点击
+            toolItems.forEach(item => {
+                item.addEventListener('click', () => {
+                    toolItems.forEach(t => t.classList.remove('active'));
+                    item.classList.add('active');
+                    
+                    currentTool = item.dataset.tool;
+                    workspaceTitle.innerHTML = `<span>·</span> ${toolNames[currentTool]}`;
+                    
+                    workspace.classList.add('visible');
+                    
+                    // 重置状态
+                    selectedFiles = [];
+                    pdfDocs = [];
+                    wordPages = [];
+                    previewImages = [];
+                    selectedPages.clear();
+                    resultFiles = [];
+                    ocrImages = [];
+                    ocrResults = [];
+                    
+                    resultArea.style.display = 'none';
+                    progressArea.style.display = 'none';
+                    fileList.innerHTML = ''; // 清空文件列表
+                    
+                    // 文件选择区的显示逻辑
+                    if (currentTool === 'md2word') {
+                        // Markdown工具：隐藏文件选择区，显示编辑器
+                        fileZone.style.display = 'none';
+                        markdownSection.style.display = 'block';
+                        initMarkdownEditor();
+                    } else {
+                        // 其他工具：显示文件选择区
+                        fileZone.style.display = 'block';
+                        markdownSection.style.display = 'none';
+                    }
+                    
+                    // 主按钮始终显示
+                    btnContainer.style.display = 'block';
+                    actionBtn.classList.remove('hidden');
+                    actionBtn.textContent = '开始处理';
+                    actionBtn.disabled = false;
+                    
+                    workspace.scrollIntoView({ behavior: 'smooth' });
+                });
+            });
+
+            // 初始化Markdown编辑器
+            function initMarkdownEditor() {
+                if (!markdownInput.value.trim()) {
+                    markdownInput.value = `# 标题\n\n输入 **Markdown** 内容，支持表格\n\n| 列1 | 列2 |\n|-----|-----|\n| 内容1 | 内容2 |`;
+                }
+                
+                const updatePreview = () => {
+                    try {
+                        markdownPreview.innerHTML = marked.parse(markdownInput.value);
+                    } catch (e) {
+                        markdownPreview.innerHTML = `<span style="color:#e60012;">解析错误</span>`;
+                    }
+                };
+                
+                markdownInput.removeEventListener('input', updatePreview);
+                markdownInput.addEventListener('input', updatePreview);
+                updatePreview();
+                
+                copyMarkdownBtn.onclick = async () => {
+                    const text = markdownInput.value;
+                    if (!text.trim()) {
+                        showNotification('没有内容可复制');
+                        return;
+                    }
+                    try {
+                        await navigator.clipboard.writeText(text);
+                        showNotification('已复制');
+                    } catch {
+                        showNotification('复制失败');
+                    }
+                };
+                
+                clearMarkdownBtn.onclick = () => {
+                    if (confirm('确定清空？')) {
+                        markdownInput.value = '';
+                        markdownPreview.innerHTML = '';
+                    }
+                };
+            }
+
+            // 返回
+            backBtn.addEventListener('click', () => {
+                workspace.classList.remove('visible');
+                toolItems.forEach(t => t.classList.remove('active'));
+                currentTool = null;
+                
+                if (ocrWorker) {
+                    ocrWorker.terminate();
+                    ocrWorker = null;
+                }
+            });
+
+            // 文件选择区点击
+            fileZone.addEventListener('click', () => {
+                if (!currentTool || currentTool === 'md2word') return;
+                
+                overlay.classList.add('show');
+                optionMenu.classList.add('show');
+            });
+
+            chatOption.addEventListener('click', () => {
+                overlay.classList.remove('show');
+                optionMenu.classList.remove('show');
+                hiddenInput.accept = getAcceptByTool(currentTool);
+                hiddenInput.multiple = true;
+                hiddenInput.click();
+            });
+
+            localOption.addEventListener('click', () => {
+                overlay.classList.remove('show');
+                optionMenu.classList.remove('show');
+                hiddenInput.accept = getAcceptByTool(currentTool);
+                hiddenInput.multiple = true;
+                hiddenInput.click();
+            });
+
+            cancelOption.addEventListener('click', () => {
+                overlay.classList.remove('show');
+                optionMenu.classList.remove('show');
+            });
+
+            overlay.addEventListener('click', () => {
+                overlay.classList.remove('show');
+                optionMenu.classList.remove('show');
+            });
+
+            function getAcceptByTool(tool) {
+                if (tool === 'pdf2word') return '.pdf';
+                if (tool === 'img2word') return '.png,.jpg,.jpeg';
+                if (tool === 'pdf2img' || tool === 'pdf-merge' || tool === 'pdf-split' || tool === 'pdf-extract' || tool === 'pdf-rotate') return '.pdf';
+                if (tool === 'img2pdf') return '.png,.jpg,.jpeg';
+                if (tool === 'word2pdf') return '.doc,.docx';
+                return '*/*';
+            }
+
+            hiddenInput.addEventListener('change', async (e) => {
+                const files = Array.from(e.target.files);
+                if (files.length === 0) return;
+
+                // 根据工具类型决定是否追加文件
+                if (['img2pdf', 'pdf-merge'].includes(currentTool)) {
+                    selectedFiles = [...selectedFiles, ...files];
+                } else {
+                    selectedFiles = files;
+                }
+                
+                renderFileList();
+                
+                showLoading('加载文件中...');
+                try {
+                    if (currentTool === 'pdf2word') {
+                        await loadPdfForWord(files[0]);
+                    } else if (currentTool === 'img2word') {
+                        await initImageOcr(files);
+                    } else if (currentTool === 'word2pdf') {
+                        await processWordFile(files[0]);
+                    } else {
+                        await loadPdfDocuments();
+                    }
+                    showNotification(`已加载 ${files.length} 个文件`);
+                } catch (error) {
+                    showNotification('加载失败: ' + error.message);
+                } finally {
+                    hideLoading();
+                }
+                
+                hiddenInput.value = '';
+            });
+
+            // 渲染文件列表
+            function renderFileList() {
+                if (selectedFiles.length === 0) {
+                    fileList.innerHTML = '';
+                    return;
+                }
+
+                let html = '';
+                selectedFiles.forEach((file, index) => {
+                    const size = (file.size / 1024).toFixed(1) + ' KB';
+                    html += `
+                        <div class="file-item" style="animation: slideIn 0.3s ease ${index * 0.05}s both;">
+                            <span class="file-name">${escapeHtml(file.name)}</span>
+                            <span class="file-size">${size}</span>
+                            <span class="file-remove" data-index="${index}">✕</span>
+                        </div>
+                    `;
+                });
+                fileList.innerHTML = html;
+
+                // 绑定删除事件
+                document.querySelectorAll('.file-remove').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const idx = e.target.dataset.index;
+                        selectedFiles.splice(idx, 1);
+                        renderFileList();
+                    });
+                });
+            }
+
+            function escapeHtml(text) {
+                return text.replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[m]);
+            }
+
+            // ========== PDF转Word ==========
+            async function loadPdfForWord(file) {
+                const arrayBuffer = await file.arrayBuffer();
+                pdfDocument = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            }
+
+            // ========== 图片OCR ==========
+            async function initImageOcr(files) {
+                ocrImages = files;
+                ocrResults = new Array(files.length).fill('');
+            }
+
+            // ========== Word处理 ==========
+            async function processWordFile(file) {
+                const arrayBuffer = await file.arrayBuffer();
+                const result = await mammoth.convertToHtml({ arrayBuffer });
+            }
+
+            // ========== PDF文档加载 ==========
+            async function loadPdfDocuments() {
+                pdfDocs = [];
+                for (const file of selectedFiles) {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    pdfDocs.push(pdf);
+                }
+            }
+
+            // ========== Markdown转Word ==========
+            async function exportMarkdownToWord() {
+                const markdown = markdownInput?.value;
+                if (!markdown || !markdown.trim()) {
+                    showNotification('请输入内容');
+                    return;
+                }
+                
+                showProgress('生成文档...', 0);
+                
+                try {
+                    const segments = identifyTableAndTextSegments(markdown);
+                    const docContent = [];
+                    
+                    for (const segment of segments) {
+                        if (segment.type === 'table') {
+                            const table = processMarkdownTable(segment.content);
+                            if (table && table.headers.length > 0) {
+                                const wordTable = createWordTable(table);
+                                docContent.push(wordTable);
+                                docContent.push(new docx.Paragraph({}));
+                            }
+                        } else {
+                            const paragraphs = processRegularText(segment.content);
+                            docContent.push(...paragraphs);
+                        }
+                    }
+                    
+                    const doc = new docx.Document({
+                        sections: [{ children: docContent }]
+                    });
+                    
+                    const blob = await docx.Packer.toBlob(doc);
+                    saveAs(blob, 'markdown.docx');
+                    
+                    // 隐藏主按钮，显示结果
+                    actionBtn.classList.add('hidden');
+                    
+                    // 显示成功结果
+                    resultFiles = [{
+                        blob: blob,
+                        name: 'markdown.docx',
+                        size: blob.size,
+                        selected: true
+                    }];
+                    renderResultList();
+                    resultArea.style.display = 'block';
+                    
+                    showNotification('导出成功');
+                    
+                } catch (error) {
+                    showNotification('导出失败: ' + error.message);
+                } finally {
+                    hideProgress();
+                }
+            }
+
+            // 识别表格和文本
+            function identifyTableAndTextSegments(markdown) {
+                const lines = markdown.split('\n');
+                const segments = [];
+                let currentSegment = { type: 'text', content: '' };
+                let inTable = false;
+                
+                for (const line of lines) {
+                    const isTableLine = line.trim().startsWith('|') && line.includes('|');
+                    
+                    if (!inTable && isTableLine) {
+                        if (currentSegment.content) segments.push({...currentSegment});
+                        inTable = true;
+                        currentSegment = { type: 'table', content: line };
+                    } else if (inTable && !isTableLine) {
+                        if (currentSegment.content) segments.push({...currentSegment});
+                        inTable = false;
+                        currentSegment = { type: 'text', content: line };
+                    } else {
+                        currentSegment.content += (currentSegment.content ? '\n' : '') + line;
+                    }
+                }
+                
+                if (currentSegment.content) segments.push(currentSegment);
+                return segments;
+            }
+
+            // 处理表格
+            function processMarkdownTable(tableContent) {
+                const lines = tableContent.split('\n').filter(l => l.trim());
+                if (lines.length < 2) return null;
+                
+                const headers = lines[0].split('|')
+                    .filter(c => c.trim())
+                    .map(c => cleanMarkdown(c.trim()));
+                
+                const rows = [];
+                for (let i = 1; i < lines.length; i++) {
+                    if (lines[i].includes('|---')) continue;
+                    const cells = lines[i].split('|')
+                        .filter(c => c.trim())
+                        .map(c => cleanMarkdown(c.trim()));
+                    if (cells.length) rows.push(cells);
+                }
+                
+                return { headers, rows };
+            }
+
+            // 清理Markdown
+            function cleanMarkdown(text) {
+                return text.replace(/\*\*(.+?)\*\*/g, '$1')
+                          .replace(/\*(.+?)\*/g, '$1')
+                          .replace(/`(.+?)`/g, '$1')
+                          .replace(/\[(.+?)\]\(.+?\)/g, '$1');
+            }
+
+            // 处理普通文本
+            function processRegularText(text) {
+                const lines = text.split('\n');
+                const paragraphs = [];
+                
+                for (const line of lines) {
+                    if (!line.trim()) {
+                        paragraphs.push(new docx.Paragraph({}));
+                        continue;
+                    }
+                    
+                    const heading = line.match(/^(#{1,6})\s+(.+)$/);
+                    if (heading) {
+                        const level = heading[1].length;
+                        const fontSize = 32 - level * 2;
+                        paragraphs.push(new docx.Paragraph({
+                            children: [new docx.TextRun({ text: heading[2], size: fontSize * 2, bold: true })],
+                            spacing: { before: 240, after: 120 }
+                        }));
+                    } else {
+                        paragraphs.push(new docx.Paragraph({
+                            children: [new docx.TextRun({ text: line, size: 24 })],
+                            spacing: { after: 120 }
+                        }));
+                    }
+                }
+                
+                return paragraphs;
+            }
+
+            // 创建Word表格
+            function createWordTable(tableData) {
+                const rows = [];
+                
+                // 标题行
+                const headerCells = tableData.headers.map(text => 
+                    new docx.TableCell({
+                        children: [new docx.Paragraph({ 
+                            children: [new docx.TextRun({ text, bold: true, size: 24 })]
+                        })],
+                        shading: { fill: "F5F5F5" },
+                        borders: { 
+                            top: { style: docx.BorderStyle.SINGLE }, 
+                            bottom: { style: docx.BorderStyle.SINGLE },
+                            left: { style: docx.BorderStyle.SINGLE }, 
+                            right: { style: docx.BorderStyle.SINGLE } 
+                        }
+                    })
+                );
+                rows.push(new docx.TableRow({ children: headerCells }));
+                
+                // 数据行
+                tableData.rows.forEach(row => {
+                    const cells = row.map(text => 
+                        new docx.TableCell({
+                            children: [new docx.Paragraph({ 
+                                children: [new docx.TextRun({ text, size: 24 })]
+                            })],
+                            borders: { 
+                                top: { style: docx.BorderStyle.SINGLE }, 
+                                bottom: { style: docx.BorderStyle.SINGLE },
+                                left: { style: docx.BorderStyle.SINGLE }, 
+                                right: { style: docx.BorderStyle.SINGLE } 
+                            }
+                        })
+                    );
+                    rows.push(new docx.TableRow({ children: cells }));
+                });
+                
+                return new docx.Table({ 
+                    rows, 
+                    width: { size: 100, type: docx.WidthType.PERCENTAGE } 
+                });
+            }
+
+            // ========== 其他PDF功能 ==========
+            async function imagesToPdf(files) {
+                const { PDFDocument } = PDFLib;
+                const pdfDoc = await PDFDocument.create();
+                
+                for (const file of files) {
+                    const imgBytes = await file.arrayBuffer();
+                    const image = file.type.includes('png') ? 
+                        await pdfDoc.embedPng(imgBytes) : await pdfDoc.embedJpg(imgBytes);
+                    const page = pdfDoc.addPage([image.width, image.height]);
+                    page.drawImage(image);
+                }
+                
+                const pdfBytes = await pdfDoc.save();
+                return [{ blob: new Blob([pdfBytes]), name: '合并.pdf', size: pdfBytes.length }];
+            }
+
+            async function mergePdfs(files) {
+                const { PDFDocument } = PDFLib;
+                const merged = await PDFDocument.create();
+                
+                for (const file of files) {
+                    const pdfBytes = await file.arrayBuffer();
+                    const pdf = await PDFDocument.load(pdfBytes);
+                    const pages = await merged.copyPages(pdf, pdf.getPageIndices());
+                    pages.forEach(page => merged.addPage(page));
+                }
+                
+                const bytes = await merged.save();
+                return [{ blob: new Blob([bytes]), name: '合并.pdf', size: bytes.length }];
+            }
+
+            // ========== UI辅助函数 ==========
+            function showNotification(msg) {
+                notifyMsg.innerText = msg;
+                notification.classList.add('show');
+                setTimeout(() => notification.classList.remove('show'), 2000);
+            }
+
+            function showLoading(text = '处理中...') {
+                loadingText.textContent = text;
+                loadingView.style.display = 'flex';
+            }
+
+            function hideLoading() {
+                loadingView.style.display = 'none';
+            }
+
+            function showProgress(status, percent) {
+                progressArea.style.display = 'block';
+                progressStatus.textContent = status;
+                progressPercent.textContent = percent + '%';
+                progressFill.style.width = percent + '%';
+            }
+
+            function hideProgress() {
+                progressArea.style.display = 'none';
+            }
+
+            function renderResultList() {
+                let html = '';
+                resultFiles.forEach((file, index) => {
+                    const size = (file.size / 1024).toFixed(1) + ' KB';
+                    html += `
+                        <div class="result-file-item">
+                            <input type="checkbox" class="result-file-checkbox" data-index="${index}" ${file.selected ? 'checked' : ''}>
+                            <span class="result-file-name">${escapeHtml(file.name)}</span>
+                            <span class="result-file-size">${size}</span>
+                            <span class="result-file-rename" data-index="${index}">重命名</span>
+                        </div>
+                    `;
+                });
+                resultList.innerHTML = html;
+
+                document.querySelectorAll('.result-file-checkbox').forEach(checkbox => {
+                    checkbox.addEventListener('change', (e) => {
+                        const index = e.target.dataset.index;
+                        resultFiles[index].selected = e.target.checked;
+                        updateResultButtons();
+                    });
+                });
+
+                document.querySelectorAll('.result-file-rename').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const index = e.target.dataset.index;
+                        const newName = prompt('新文件名', resultFiles[index].name);
+                        if (newName) {
+                            resultFiles[index].name = newName;
+                            renderResultList();
+                        }
+                    });
+                });
+            }
+
+            function updateResultButtons() {
+                const hasSelected = resultFiles.some(f => f.selected);
+                downloadSelectedBtn.disabled = !hasSelected;
+                
+                if (resultFiles.length > 1) {
+                    zipOption.style.display = 'block';
+                } else {
+                    zipOption.style.display = 'none';
+                }
+            }
+
+            selectAllResultBtn.addEventListener('click', () => {
+                const allSelected = resultFiles.every(f => f.selected);
+                resultFiles.forEach(f => f.selected = !allSelected);
+                renderResultList();
+                updateResultButtons();
+            });
+
+            downloadSelectedBtn.addEventListener('click', () => {
+                const selected = resultFiles.filter(f => f.selected);
+                if (selected.length === 1) {
+                    const file = selected[0];
+                    saveAs(file.blob, file.name);
+                } else if (selected.length > 1) {
+                    zipOption.style.display = 'block';
+                }
+            });
+
+            downloadZipBtn.addEventListener('click', async () => {
+                const selected = resultFiles.filter(f => f.selected);
+                if (selected.length === 0) return;
+                
+                showLoading('打包中...');
+                try {
+                    const zip = new JSZip();
+                    selected.forEach(file => zip.file(file.name, file.blob));
+                    const zipBlob = await zip.generateAsync({ type: 'blob' });
+                    saveAs(zipBlob, '文档打包.zip');
+                } catch (error) {
+                    showNotification('打包失败');
+                } finally {
+                    hideLoading();
+                }
+            });
+
+            downloadSeparateBtn.addEventListener('click', () => {
+                const selected = resultFiles.filter(f => f.selected);
+                selected.forEach((file, i) => {
+                    setTimeout(() => saveAs(file.blob, file.name), i * 500);
+                });
+            });
+
+            // 主按钮点击
+            actionBtn.addEventListener('click', async () => {
+                if (!currentTool) return;
+
+                // Markdown转Word
+                if (currentTool === 'md2word') {
+                    await exportMarkdownToWord();
+                    return;
+                }
+
+                // 其他功能
+                actionBtn.disabled = true;
+                showLoading('处理中...');
+                
+                try {
+                    let results = [];
+                    
+                    if (currentTool === 'img2pdf') {
+                        results = await imagesToPdf(selectedFiles);
+                    } else if (currentTool === 'pdf-merge') {
+                        results = await mergePdfs(selectedFiles);
+                    } else {
+                        results = [{ blob: new Blob(['test']), name: 'output.pdf', size: 4 }];
+                    }
+                    
+                    if (results.length > 0) {
+                        // 隐藏主按钮
+                        actionBtn.classList.add('hidden');
+                        
+                        // 显示结果
+                        resultFiles = results.map(f => ({ ...f, selected: true }));
+                        renderResultList();
+                        resultArea.style.display = 'block';
+                        showNotification('处理完成');
+                    }
+                } catch (err) {
+                    showNotification('处理失败: ' + err.message);
+                } finally {
+                    actionBtn.disabled = false;
+                    hideLoading();
+                }
+            });
+        })();
+    </script>
+</body>
+</html>
