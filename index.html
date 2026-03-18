@@ -1192,13 +1192,29 @@ copyPreviewBtn.addEventListener('click', () => {
                 optionMenu.classList.add('show');
             });
 
-            chatOption.addEventListener('click', () => {
-                overlay.classList.remove('show');
-                optionMenu.classList.remove('show');
-                hiddenInput.accept = getAcceptByTool(currentTool);
-                hiddenInput.multiple = true;
-                hiddenInput.click();
-            });
+            // 从微信聊天获取
+chatOption.addEventListener('click', () => {
+    overlay.classList.remove('show');
+    optionMenu.classList.remove('show');
+    
+    // 微信内点击文件输入会自动显示"从聊天选择"
+    // 给用户一个友好的提示
+    showNotification('请在弹出菜单中选择"从聊天选择"');
+    
+    hiddenInput.accept = getAcceptByTool(currentTool);
+    hiddenInput.multiple = true;
+    hiddenInput.click();
+});
+
+// 从本地文件获取
+localOption.addEventListener('click', () => {
+    overlay.classList.remove('show');
+    optionMenu.classList.remove('show');
+    
+    hiddenInput.accept = getAcceptByTool(currentTool);
+    hiddenInput.multiple = true;
+    hiddenInput.click();
+});
 
             localOption.addEventListener('click', () => {
                 overlay.classList.remove('show');
