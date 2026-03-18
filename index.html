@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>小红点 · 极简PDF</title>
+    <!-- 手机桌面图标 - 小红点 -->
+    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23e60012'/%3E%3C/svg%3E">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23e60012'/%3E%3C/svg%3E">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#e60012">
+    
     <!-- 核心库 -->
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
@@ -679,12 +686,14 @@
             to { transform: rotate(360deg); }
         }
 
-        /* 隐藏文件输入 */
+        /* 隐藏文件输入 - 微信优化 */
         #hiddenFileInput {
             position: absolute;
             width: 0;
             height: 0;
             opacity: 0;
+            left: -9999px;
+            top: -9999px;
         }
 
         /* 响应式 */
@@ -777,15 +786,15 @@
                 <div class="back-btn" id="backBtn">← 返回</div>
             </div>
 
-            <!-- 文件选择区 - 始终存在，通过JS控制显示/隐藏 -->
+            <!-- 文件选择区 -->
             <div class="file-zone" id="fileZone">
                 <div class="main-text">点击选择文件</div>
             </div>
 
-            <!-- 文件列表 - 动态显示 -->
+            <!-- 文件列表 -->
             <div class="file-list" id="fileList"></div>
             
-            <!-- Markdown编辑器 - 默认隐藏 -->
+            <!-- Markdown编辑器 -->
             <div class="markdown-editor-section" id="markdownSection">
                 <div class="markdown-toolbar">
                     <button class="toolbar-btn" id="copyMarkdownBtn">复制</button>
@@ -838,8 +847,8 @@
             </div>
         </div>
 
-        <!-- 隐藏文件输入 -->
-        <input type="file" id="hiddenFileInput" multiple>
+        <!-- 隐藏文件输入 - 微信优化 -->
+        <input type="file" id="hiddenFileInput" multiple style="position:absolute; width:0; height:0; opacity:0; left:-9999px; top:-9999px;">
 
         <!-- 选项菜单 -->
         <div class="overlay" id="overlay"></div>
@@ -923,6 +932,12 @@
             const cancelOption = document.getElementById('cancelOption');
             const notification = document.getElementById('notification');
             const notifyMsg = document.getElementById('notifyMsg');
+
+            // 检测是否在微信内
+            function isWeChat() {
+                const ua = navigator.userAgent.toLowerCase();
+                return ua.indexOf('micromessenger') !== -1;
+            }
 
             // 工具名称
             const toolNames = {
@@ -1045,19 +1060,41 @@
                 optionMenu.classList.add('show');
             });
 
+            // 从微信聊天获取
             chatOption.addEventListener('click', () => {
                 overlay.classList.remove('show');
                 optionMenu.classList.remove('show');
-                hiddenInput.accept = getAcceptByTool(currentTool);
+                
+                // 设置文件类型
+                hiddenInput.setAttribute('accept', getAcceptByTool(currentTool));
                 hiddenInput.multiple = true;
-                hiddenInput.click();
+                
+                // 微信内特殊处理
+                if (isWeChat()) {
+                    // 移除capture属性，确保不调起相机
+                    hiddenInput.removeAttribute('capture');
+                    
+                    // 有些微信版本需要重置input才能生效
+                    const newInput = hiddenInput.cloneNode(true);
+                    hiddenInput.parentNode.replaceChild(newInput, hiddenInput);
+                    window.hiddenInput = newInput;
+                    
+                    // 重新绑定事件
+                    newInput.addEventListener('change', handleFileSelect);
+                    setTimeout(() => newInput.click(), 50);
+                } else {
+                    hiddenInput.click();
+                }
             });
 
+            // 从本地文件获取
             localOption.addEventListener('click', () => {
                 overlay.classList.remove('show');
                 optionMenu.classList.remove('show');
-                hiddenInput.accept = getAcceptByTool(currentTool);
+                
+                hiddenInput.setAttribute('accept', getAcceptByTool(currentTool));
                 hiddenInput.multiple = true;
+                hiddenInput.removeAttribute('capture');
                 hiddenInput.click();
             });
 
@@ -1080,7 +1117,8 @@
                 return '*/*';
             }
 
-            hiddenInput.addEventListener('change', async (e) => {
+            // 文件选择处理函数
+            function handleFileSelect(e) {
                 const files = Array.from(e.target.files);
                 if (files.length === 0) return;
 
@@ -1096,13 +1134,13 @@
                 showLoading('加载文件中...');
                 try {
                     if (currentTool === 'pdf2word') {
-                        await loadPdfForWord(files[0]);
+                        loadPdfForWord(files[0]);
                     } else if (currentTool === 'img2word') {
-                        await initImageOcr(files);
+                        initImageOcr(files);
                     } else if (currentTool === 'word2pdf') {
-                        await processWordFile(files[0]);
+                        processWordFile(files[0]);
                     } else {
-                        await loadPdfDocuments();
+                        loadPdfDocuments();
                     }
                     showNotification(`已加载 ${files.length} 个文件`);
                 } catch (error) {
@@ -1110,9 +1148,10 @@
                 } finally {
                     hideLoading();
                 }
-                
-                hiddenInput.value = '';
-            });
+            }
+
+            // 绑定文件选择事件
+            hiddenInput.addEventListener('change', handleFileSelect);
 
             // 渲染文件列表
             function renderFileList() {
